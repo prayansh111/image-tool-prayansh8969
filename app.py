@@ -4,10 +4,33 @@ import io
 import json
 import os
 
-st.set_page_config(page_title="Image Tool Pro", layout="centered")
+# -------- PAGE CONFIG --------
+st.set_page_config(page_title="Image Tool Pro", layout="wide")
+
+# -------- HEADER DESIGN --------
+st.markdown("""
+    <style>
+    .header {
+        text-align: center;
+        padding: 20px;
+        background-color: #0e1117;
+        color: white;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="header">
+    <h1>🖼️ Image Tool Pro</h1>
+    <h3>Developer: Prayansh Gautam</h3>
+</div>
+""", unsafe_allow_html=True)
 
 # -------- USER SYSTEM --------
 USER_FILE = "users.json"
+MASTER_KEY = "8969720851"
 
 def load_users():
     if os.path.exists(USER_FILE):
@@ -24,68 +47,75 @@ users = load_users()
 if "user" not in st.session_state:
     st.session_state.user = None
 
-st.title("🖼️ Image Tool Pro")
-
 # -------- LOGIN --------
 if not st.session_state.user:
-    st.subheader("Login / Signup")
+    st.subheader("🔐 Login / Signup")
+
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
+    key = st.text_input("Pro Key (optional)")
 
     if st.button("Login / Signup"):
-        if username not in users:
-            users[username] = {"password": password, "pro": False, "history": []}
-            save_users(users)
-            st.success("Account created!")
-        elif users[username]["password"] != password:
-            st.error("Wrong password")
-        st.session_state.user = username
-        st.rerun()
+        if username == "" or password == "":
+            st.error("Enter username & password")
+        else:
+            if username not in users:
+                users[username] = {
+                    "password": password,
+                    "pro": False,
+                    "history": []
+                }
 
+            if users[username]["password"] != password:
+                st.error("Wrong password")
+            else:
+                if key == MASTER_KEY:
+                    users[username]["pro"] = True
+
+                save_users(users)
+                st.session_state.user = username
+                st.rerun()
+
+# -------- MAIN APP --------
 else:
     user = st.session_state.user
     st.success(f"Welcome {user}")
 
-    # -------- PRO PLAN --------
-    if not users[user]["pro"]:
-        st.warning("Free Plan (Upgrade to Pro ₹30/month)")
-        if st.button("Activate Pro (Demo)"):
-            users[user]["pro"] = True
-            save_users(users)
-            st.success("Pro Activated!")
+    # PLAN STATUS
+    if users[user]["pro"]:
+        st.success("🌟 PRO USER")
     else:
-        st.success("🌟 Pro User")
+        st.warning("Free Plan (Enter Pro Key to unlock PRO)")
 
-    # -------- IMAGE TOOL --------
-    uploaded_file = st.file_uploader("Upload Image", type=["jpg","jpeg","png","webp"])
+    uploaded_file = st.file_uploader("📤 Upload Image", type=["jpg","jpeg","png","webp"])
 
     if uploaded_file:
         img = Image.open(uploaded_file)
-        st.image(img, caption="Original", use_column_width=True)
+        st.image(img, caption="Original Image", use_column_width=True)
 
-        st.subheader("Settings")
+        st.subheader("⚙️ Settings")
 
         # Resize
-        resize = st.checkbox("Resize")
+        resize = st.checkbox("Resize Image")
         if resize:
             width = st.number_input("Width", value=img.width)
             height = st.number_input("Height", value=img.height)
 
-        # Compress
-        quality = st.slider("Quality", 10, 100, 80)
+        # Compression
+        quality = st.slider("Compression Quality", 10, 100, 80)
 
-        # Convert
-        format_option = st.selectbox("Format", ["JPEG","PNG","WEBP"])
+        # Format conversion
+        format_option = st.selectbox("Convert Format", ["JPEG","PNG","WEBP"])
 
         # PRO FEATURES
         if users[user]["pro"]:
             grayscale = st.checkbox("Convert to Grayscale")
-            rotate = st.slider("Rotate", 0, 360, 0)
+            rotate = st.slider("Rotate Image", 0, 360, 0)
         else:
             grayscale = False
             rotate = 0
 
-        if st.button("Process"):
+        if st.button("🚀 Process Image"):
             processed = img
 
             if resize:
@@ -104,9 +134,13 @@ else:
             processed.save(buf, format=format_option, quality=quality)
             byte_im = buf.getvalue()
 
-            st.image(processed, caption="Processed", use_column_width=True)
+            st.image(processed, caption="Processed Image", use_column_width=True)
 
-            st.download_button("Download", byte_im, file_name="image."+format_option.lower())
+            st.download_button(
+                "📥 Download Image",
+                byte_im,
+                file_name="image."+format_option.lower()
+            )
 
             # SAVE HISTORY
             users[user]["history"].append({
@@ -116,11 +150,14 @@ else:
             save_users(users)
 
     # -------- HISTORY --------
-    st.subheader("📜 History")
-    for h in users[user]["history"]:
-        st.write(h)
+    st.subheader("📜 Your History")
+    if users[user]["history"]:
+        for h in users[user]["history"]:
+            st.write(h)
+    else:
+        st.write("No history yet")
 
     # -------- LOGOUT --------
-    if st.button("Logout"):
+    if st.button("🚪 Logout"):
         st.session_state.user = None
         st.rerun()
