@@ -1,55 +1,126 @@
 import streamlit as st
 from PIL import Image
 import io
+import json
+import os
 
 st.set_page_config(page_title="Image Tool Pro", layout="centered")
 
+# -------- USER SYSTEM --------
+USER_FILE = "users.json"
+
+def load_users():
+    if os.path.exists(USER_FILE):
+        with open(USER_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_users(users):
+    with open(USER_FILE, "w") as f:
+        json.dump(users, f)
+
+users = load_users()
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
 st.title("🖼️ Image Tool Pro")
-st.write("Compress • Resize • Convert images easily")
 
-uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png", "webp"])
+# -------- LOGIN --------
+if not st.session_state.user:
+    st.subheader("Login / Signup")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
 
-if uploaded_file:
-    img = Image.open(uploaded_file)
-    st.image(img, caption="Original Image", use_column_width=True)
+    if st.button("Login / Signup"):
+        if username not in users:
+            users[username] = {"password": password, "pro": False, "history": []}
+            save_users(users)
+            st.success("Account created!")
+        elif users[username]["password"] != password:
+            st.error("Wrong password")
+        st.session_state.user = username
+        st.rerun()
 
-    st.subheader("⚙️ Settings")
+else:
+    user = st.session_state.user
+    st.success(f"Welcome {user}")
 
-    # Resize option
-    resize = st.checkbox("Resize Image")
-    if resize:
-        width = st.number_input("Width", value=img.width)
-        height = st.number_input("Height", value=img.height)
+    # -------- PRO PLAN --------
+    if not users[user]["pro"]:
+        st.warning("Free Plan (Upgrade to Pro ₹30/month)")
+        if st.button("Activate Pro (Demo)"):
+            users[user]["pro"] = True
+            save_users(users)
+            st.success("Pro Activated!")
+    else:
+        st.success("🌟 Pro User")
 
-    # Compression quality
-    quality = st.slider("Compression Quality", 10, 100, 80)
+    # -------- IMAGE TOOL --------
+    uploaded_file = st.file_uploader("Upload Image", type=["jpg","jpeg","png","webp"])
 
-    # Format conversion
-    format_option = st.selectbox("Convert Format", ["JPEG", "PNG", "WEBP"])
+    if uploaded_file:
+        img = Image.open(uploaded_file)
+        st.image(img, caption="Original", use_column_width=True)
 
-    if st.button("🚀 Process Image"):
-        processed_img = img
+        st.subheader("Settings")
 
         # Resize
+        resize = st.checkbox("Resize")
         if resize:
-            processed_img = processed_img.resize((int(width), int(height)))
+            width = st.number_input("Width", value=img.width)
+            height = st.number_input("Height", value=img.height)
 
-        # Convert mode for JPEG
-        if format_option == "JPEG":
-            processed_img = processed_img.convert("RGB")
+        # Compress
+        quality = st.slider("Quality", 10, 100, 80)
 
-        # Save to memory
-        buf = io.BytesIO()
-        processed_img.save(buf, format=format_option, quality=quality)
-        byte_im = buf.getvalue()
+        # Convert
+        format_option = st.selectbox("Format", ["JPEG","PNG","WEBP"])
 
-        st.success("✅ Image Processed!")
+        # PRO FEATURES
+        if users[user]["pro"]:
+            grayscale = st.checkbox("Convert to Grayscale")
+            rotate = st.slider("Rotate", 0, 360, 0)
+        else:
+            grayscale = False
+            rotate = 0
 
-        st.image(processed_img, caption="Processed Image", use_column_width=True)
+        if st.button("Process"):
+            processed = img
 
-        st.download_button(
-            label="📥 Download Image",
-            data=byte_im,
-            file_name=f"processed.{format_option.lower()}",
-            mime=f"image/{format_option.lower()}"
-        )
+            if resize:
+                processed = processed.resize((int(width), int(height)))
+
+            if grayscale:
+                processed = processed.convert("L")
+
+            if rotate:
+                processed = processed.rotate(rotate)
+
+            if format_option == "JPEG":
+                processed = processed.convert("RGB")
+
+            buf = io.BytesIO()
+            processed.save(buf, format=format_option, quality=quality)
+            byte_im = buf.getvalue()
+
+            st.image(processed, caption="Processed", use_column_width=True)
+
+            st.download_button("Download", byte_im, file_name="image."+format_option.lower())
+
+            # SAVE HISTORY
+            users[user]["history"].append({
+                "format": format_option,
+                "quality": quality
+            })
+            save_users(users)
+
+    # -------- HISTORY --------
+    st.subheader("📜 History")
+    for h in users[user]["history"]:
+        st.write(h)
+
+    # -------- LOGOUT --------
+    if st.button("Logout"):
+        st.session_state.user = None
+        st.rerun()
